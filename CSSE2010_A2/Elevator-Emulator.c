@@ -37,6 +37,9 @@ typedef enum {UNDEF_FLOOR = -1, FLOOR_0=0, FLOOR_1=4, FLOOR_2=8, FLOOR_3=12} Ele
 uint32_t time_since_move;
 ElevatorFloor current_position;
 ElevatorFloor destination;
+ElevatorFloor current_floor;
+const char *direction;
+bool moved = false;
 
 /* Internal Function Declarations */
 
@@ -165,8 +168,14 @@ void start_elevator_emulator(void) {
 	(void)button_pushed();
 	clear_serial_input_buffer();
 
-	// Initialise local variables
 	time_since_move = get_current_time();
+	
+	current_position = FLOOR_0;
+	destination      = FLOOR_0;
+	current_floor    = FLOOR_0;
+	direction        = "Stationary";
+	moved            = true;
+	
 	
 	// Draw the floors and elevator
 	draw_elevator();
@@ -180,17 +189,40 @@ void start_elevator_emulator(void) {
 		// Only update the elevator every 200 ms
 		if (get_current_time() - time_since_move > 200) {	
 			
+			
+			
+
 			// Adjust the elevator based on where it needs to go
 			if (destination - current_position > 0) { // Move up
 				current_position++;
+				moved = true;
+				direction = "Up";
 			} else if (destination - current_position < 0) { // Move down
 				current_position--;
+				moved = true;
+
+				direction = "Down";
+			} else {
+				direction = "Stationary";
 			}
+			
+			 if (current_position % 4 == 0) {
+				 current_floor = current_position;
+			 }
 			
 			// As we have potentially changed the elevator position, lets redraw it
 			draw_elevator();
 			
 			time_since_move = get_current_time(); // Reset delay until next movement update
+		}
+		if (moved) {
+			clear_terminal();
+            uint8_t floor_num = current_floor / 4;
+			move_terminal_cursor(10,10);
+			printf("Current Level: %d", floor_num);
+			move_terminal_cursor(10,12);
+			printf("Direction: %s", direction);
+			moved = false;
 		}
 		
 		// Handle any button or key inputs
@@ -306,3 +338,17 @@ void handle_inputs(void) {
 	}
 
 	}
+	
+char current_floor_tostring(ElevatorFloor floor) {
+	switch (floor){
+		case FLOOR_0: return "0";
+		case FLOOR_1: return "1";
+		case FLOOR_2: return "2";
+		case FLOOR_3: return "3";
+	}	
+	return "Unknown";
+}
+
+char get_direction(ElevatorFloor current, ElevatorFloor destination) {
+	
+}
