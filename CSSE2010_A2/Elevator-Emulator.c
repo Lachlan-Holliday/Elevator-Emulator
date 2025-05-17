@@ -216,6 +216,7 @@ void start_elevator_emulator(void) {
 			
 			if (traveller_present && current_position == traveller_floor) {
 				traveller_present = false;
+				destination = FLOOR_0;
 				draw_traveller();
 			}
 			
