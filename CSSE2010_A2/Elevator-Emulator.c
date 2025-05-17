@@ -40,6 +40,13 @@ ElevatorFloor destination;
 ElevatorFloor current_floor;
 const char *direction;
 bool moved = false;
+bool traveller_present = false;
+ElevatorFloor traveller_floor;
+
+#define TRAVELLER_COLUMN 4
+ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
+
+
 
 /* Internal Function Declarations */
 
@@ -189,8 +196,6 @@ void start_elevator_emulator(void) {
 		// Only update the elevator every 200 ms
 		if (get_current_time() - time_since_move > 200) {	
 			
-			
-			
 
 			// Adjust the elevator based on where it needs to go
 			if (destination - current_position > 0) { // Move up
@@ -200,15 +205,23 @@ void start_elevator_emulator(void) {
 			} else if (destination - current_position < 0) { // Move down
 				current_position--;
 				moved = true;
-
 				direction = "Down";
 			} else {
 				direction = "Stationary";
 			}
 			
-			 if (current_position % 4 == 0) {
-				 current_floor = current_position;
-			 }
+			if (destination == current_position) {
+				direction = "Stationary";
+			}
+			
+			if (traveller_present && current_position == traveller_floor) {
+				traveller_present = false;
+				draw_traveller();
+			}
+			
+			if (current_position % 4 == 0) {
+				current_floor = current_position;
+			}
 			
 			// As we have potentially changed the elevator position, lets redraw it
 			draw_elevator();
@@ -241,6 +254,20 @@ void draw_floors(void) {
 		update_square_colour(i, FLOOR_1, FLOOR);
 		update_square_colour(i, FLOOR_2, FLOOR);
 		update_square_colour(i, FLOOR_3, FLOOR);
+	}
+}
+
+void draw_traveller(void) {
+	if (last_traveller_floor != UNDEF_FLOOR) {
+		int prev_row = last_traveller_floor + 1;  // two LEDs above the floor line
+		update_square_colour(TRAVELLER_COLUMN, prev_row, EMPTY_SQUARE);
+	}
+	if (traveller_present) {
+		int row = traveller_floor + 1;
+		update_square_colour(TRAVELLER_COLUMN, row, TRAVELLER_TO_0);
+		last_traveller_floor = traveller_floor;
+	} else {
+		last_traveller_floor = UNDEF_FLOOR;
 	}
 }
 
@@ -285,6 +312,7 @@ void draw_elevator(void) {
 */
 void handle_inputs(void) {
 	
+	
 	/* ******** START HERE ********
 	
 	 The following code handles moving the elevator using the buttons on the
@@ -302,53 +330,46 @@ void handle_inputs(void) {
 	
 	// We need to check if any button has been pushed
 	uint8_t btn = button_pushed();
-	
-	if (btn == BUTTON0_PUSHED) {
-		// Move to Floor 0
-		destination = FLOOR_0;
-	} else if (btn == BUTTON1_PUSHED) {
-		// Move to Floor 1
-		destination = FLOOR_1;
-	} else if (btn == BUTTON2_PUSHED) {
-		// Move to Floor 2
-		destination = FLOOR_2;
-	
-	} else if (btn == BUTTON3_PUSHED) {
-		// Move to Floor 3
-		destination = FLOOR_3;
-	}
-	
-	// Check for if a '0, 1, 2, 3' is pressed
-	// There are two steps to this
-	// 1) collect any serial input (if available)
-	// 2) check if the input is equal to the character 's'
 	char serial_input = -1;
 	if (serial_input_available()) {
-		serial_input = fgetc(stdin);
+		serial_input = fgetc(stdin);}
+		
+	if (traveller_present) {
+		return;
 	}
-	// If the serial input is 's', then exit the start screen
-	if (serial_input == '0') {
+	
+	if (btn == BUTTON0_PUSHED || serial_input == '0') {
+		// Move to Floor 0
 		destination = FLOOR_0;
-	} else if (serial_input == '1') {
+		traveller_present  = true;
+		traveller_floor = FLOOR_0;
+		draw_traveller();
+
+
+		
+	} else if (btn == BUTTON1_PUSHED || serial_input == '1') {
+		// Move to Floor 1
 		destination = FLOOR_1;
-	} else if (serial_input == '2') {
+		traveller_floor = FLOOR_1;
+		traveller_present  = true;
+		draw_traveller();
+
+
+
+	} else if (btn == BUTTON2_PUSHED || serial_input == '2') {
+		// Move to Floor 2
 		destination = FLOOR_2;
-	} else if (serial_input == '3') {
+		traveller_present  = true;
+		traveller_floor = FLOOR_2;
+		draw_traveller();
+
+	
+	} else if (btn == BUTTON3_PUSHED || serial_input == '3') {
+		// Move to Floor 3
 		destination = FLOOR_3;
-	}
+		traveller_present  = true;
+		traveller_floor = FLOOR_3;
+		draw_traveller();
 
 	}
-	
-char current_floor_tostring(ElevatorFloor floor) {
-	switch (floor){
-		case FLOOR_0: return "0";
-		case FLOOR_1: return "1";
-		case FLOOR_2: return "2";
-		case FLOOR_3: return "3";
-	}	
-	return "Unknown";
-}
-
-char get_direction(ElevatorFloor current, ElevatorFloor destination) {
-	
-}
+	}
