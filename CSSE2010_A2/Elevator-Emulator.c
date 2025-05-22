@@ -4,7 +4,7 @@
  * Main file
  *
  * Authors: Peter Sutton, Ahmed Baig
- * Modified by <YOUR NAME HERE>
+ * Modified by Lachlan Holliday
  */ 
 
 /* Definitions */
@@ -42,6 +42,7 @@ const char *direction;
 bool moved = false;
 bool traveller_present = false;
 ElevatorFloor traveller_floor;
+uint16_t speed;
 
 #define TRAVELLER_COLUMN 4
 ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
@@ -56,6 +57,9 @@ void start_elevator_emulator(void);
 void handle_inputs(void);
 void draw_elevator(void);
 void draw_floors(void);
+void draw_traveller(void);
+uint16_t get_speed(void);
+
 
 /* Main */
 
@@ -183,6 +187,11 @@ void start_elevator_emulator(void) {
 	direction        = "Stationary";
 	moved            = true;
 	
+	// set pd4 as input
+	DDRD &= 0b11101111;
+	
+	
+	
 	
 	// Draw the floors and elevator
 	draw_elevator();
@@ -192,9 +201,10 @@ void start_elevator_emulator(void) {
 	destination = FLOOR_0;
 	
 	while(true) {
+		speed = get_speed(); 
 		
 		// Only update the elevator every 200 ms
-		if (get_current_time() - time_since_move > 200) {	
+		if (get_current_time() - time_since_move > speed) {	
 			
 
 			// Adjust the elevator based on where it needs to go
@@ -260,7 +270,7 @@ void draw_floors(void) {
 
 void draw_traveller(void) {
 	if (last_traveller_floor != UNDEF_FLOOR) {
-		int prev_row = last_traveller_floor + 1;  // two LEDs above the floor line
+		int prev_row = last_traveller_floor + 1;
 		update_square_colour(TRAVELLER_COLUMN, prev_row, EMPTY_SQUARE);
 	}
 	if (traveller_present) {
@@ -373,4 +383,13 @@ void handle_inputs(void) {
 		draw_traveller();
 
 	}
+	
+}
+
+uint16_t get_speed(void) {
+	if (PIND & (1 << 4)) {
+		return 250;
+		} else {
+		return 100;
 	}
+}
