@@ -11,6 +11,9 @@
 
 #define F_CPU 8000000L
 
+#define SSD_CC 0b00001000
+#define SSD_CLEAR 0b00000111
+
 /* External Library Includes */
 
 #include <avr/io.h>
@@ -33,6 +36,7 @@
 
 typedef enum {UNDEF_FLOOR = -1, FLOOR_0=0, FLOOR_1=4, FLOOR_2=8, FLOOR_3=12} ElevatorFloor;
 
+
 /* Global Variables */
 uint32_t time_since_move;
 ElevatorFloor current_position;
@@ -43,6 +47,9 @@ bool moved = false;
 bool traveller_present = false;
 ElevatorFloor traveller_floor;
 uint16_t speed;
+uint8_t last_direction = 0;
+
+
 
 #define TRAVELLER_COLUMN 4
 ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
@@ -94,6 +101,12 @@ void initialise_hardware(void) {
 	
 	// Turn on global interrupts
 	sei();
+	
+	DDRA  |= SSD_CLEAR | SSD_CC;
+	  
+	// enable ssd
+	PORTA &= ~SSD_CC;
+	PORTA &= ~SSD_CLEAR;
 }
 
 /**
@@ -122,6 +135,7 @@ void start_screen(void) {
 	
 	// Wait until a button is pressed, or 's' is pressed on the terminal
 	while(1) {
+
 		
 		// Don't worry about this if/else tree. Its purely for animating
 		// the elevator doors on the start screen
@@ -199,8 +213,12 @@ void start_elevator_emulator(void) {
 	
 	current_position = FLOOR_0;
 	destination = FLOOR_0;
+	PORTA |= 0b00000010;
+
 	
 	while(true) {
+		uint8_t next_ssd_display;
+
 		speed = get_speed(); 
 		
 		// Only update the elevator every 200 ms
@@ -212,16 +230,21 @@ void start_elevator_emulator(void) {
 				current_position++;
 				moved = true;
 				direction = "Up";
+				next_ssd_display = 0b00000001;
 			} else if (destination - current_position < 0) { // Move down
 				current_position--;
 				moved = true;
 				direction = "Down";
+				next_ssd_display= 0b00000100;
+
 			} else {
 				direction = "Stationary";
+				next_ssd_display = 0b00000010;
 			}
 			
 			if (destination == current_position) {
 				direction = "Stationary";
+				next_ssd_display = 0b00000010;
 			}
 			
 			if (traveller_present && current_position == traveller_floor) {
@@ -232,6 +255,17 @@ void start_elevator_emulator(void) {
 			
 			if (current_position % 4 == 0) {
 				current_floor = current_position;
+			}
+			
+			if (next_ssd_display != last_direction) {
+				// clear A/G/D (bits 0–2)
+				PORTA &= ~SSD_CLEAR;
+
+				// light the new segment
+				PORTA |= next_ssd_display;
+
+				// remember for next time
+				last_direction = next_ssd_display;
 			}
 			
 			// As we have potentially changed the elevator position, lets redraw it
@@ -247,8 +281,7 @@ void start_elevator_emulator(void) {
 			move_terminal_cursor(10,12);
 			printf("Direction: %s", direction);
 			moved = false;
-		}
-		
+		}		
 		// Handle any button or key inputs
 		handle_inputs();
 	}
