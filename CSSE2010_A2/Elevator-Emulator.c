@@ -12,6 +12,7 @@
 #define F_CPU 8000000L
 
 #define SSD_CC 0b00001000
+#define SSD_CC2 0b00010000
 #define SSD_CLEAR 0b00000111
 
 /* External Library Includes */
@@ -102,10 +103,12 @@ void initialise_hardware(void) {
 	// Turn on global interrupts
 	sei();
 	
-	DDRA  |= SSD_CLEAR | SSD_CC;
+	DDRA  |= SSD_CLEAR | SSD_CC | SSD_CC2;
 	  
 	// enable ssd
-	PORTA &= ~SSD_CC;
+	 PORTA |=  SSD_CC;
+	 PORTA &= ~SSD_CC2;
+	 
 	PORTA &= ~SSD_CLEAR;
 }
 
@@ -201,10 +204,8 @@ void start_elevator_emulator(void) {
 	direction        = "Stationary";
 	moved            = true;
 	
-	// set pd4 as input
+	// set pd4 as input (for speed switch)
 	DDRD &= 0b11101111;
-	
-	
 	
 	
 	// Draw the floors and elevator
@@ -378,7 +379,7 @@ void handle_inputs(void) {
 	if (serial_input_available()) {
 		serial_input = fgetc(stdin);}
 		
-	if (traveller_present) {
+	if (traveller_present | (current_floor != destination)) {
 		return;
 	}
 	
