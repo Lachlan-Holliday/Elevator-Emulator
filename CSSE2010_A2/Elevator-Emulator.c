@@ -146,31 +146,21 @@ int main(void) {
 /* Internal Function Definitions */
 
 
-static void beep(uint16_t freq, uint16_t dur_ms) {
-    // 1) Compute OCR1A for toggle-on-compare, prescaler=8
-    uint16_t ocr = (F_CPU/(2UL*8UL*freq)) - 1;
-    OCR1A = ocr;
+static void beep(uint16_t freq, uint16_t dur_ms)
+{
+	OCR1A   = F_CPU/(16UL*freq) - 1;
+	TCNT1   = 0;
+	TCCR1A  = 0;
+	TCCR1B  = (1<<WGM12) | (1<<CS11);
 
-    // 2) Reset counter, start CTC mode + clk/8
-    TCNT1  = 0;
-    TCCR1A = 0;                      // normal port ops on OC1A
-    TCCR1B = (1<<WGM12)|(1<<CS11);   // CTC + prescaler 8
-
-    // 3) Figure out how many toggles we need:
-    //    each full square wave is two toggles,
-    //    so toggles = freq * (dur_ms/1000) * 2
-    uint32_t toggles = (uint32_t)freq * dur_ms * 2UL / 1000UL;
-
-    // 4) Busy-wait & toggle PC5 each time OCF1A goes high:
-    for(uint32_t i = 0; i < toggles; i++) {
-        while(!(TIFR1 & (1<<OCF1A)));   // wait for compare match
-        TIFR1 |= (1<<OCF1A);            // clear the flag
-        BUZZER_PORT  ^= (1<<BUZZER_PIN);       // toggle the buzzer pin
-    }
-
-    // 5) Stop the timer and make sure the pin is low
-    TCCR1B = 0;
-    BUZZER_PORT  &= ~(1<<BUZZER_PIN);
+	uint32_t count = (uint32_t)freq * dur_ms * 2UL / 1000UL;
+	while (count--) {
+		while (!(TIFR1 & (1<<OCF1A)));
+		TIFR1        = (1<<OCF1A);
+		BUZZER_PORT ^= (1<<BUZZER_PIN);
+	}
+	TCCR1B = 0;
+	BUZZER_PORT &= ~(1<<BUZZER_PIN);
 }
 
 
@@ -427,7 +417,6 @@ void start_elevator_emulator(void) {
 			move_terminal_cursor(10,12);
 			printf("Direction: %s", direction);
 
-			// New lines for Display #2:
 			move_terminal_cursor(10,14);
 			printf("Floors with traveller: %lu", floors_with_traveller);
 
@@ -437,7 +426,6 @@ void start_elevator_emulator(void) {
 			moved = false;
 		}
 	
-		// Handle any button or key inputs
 		handle_inputs();
 	}
 }
