@@ -62,9 +62,12 @@ ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
 const char *direction;
 bool moved = false;
 bool traveller_present = false;
+bool traveller_onboard = false;
 ElevatorFloor traveller_floor;
 uint16_t speed;
 uint8_t last_direction = SEG_G;
+uint32_t floors_with_traveller    = 0;
+uint32_t floors_without_traveller = 0;
 
 
 
@@ -279,27 +282,47 @@ void start_elevator_emulator(void) {
 			// Adjust the elevator based on where it needs to go
 			if (destination > current_position) { // Move up
 				current_position++;
-				moved = true;
+				moved     = true;
 				direction = "Up";
-				next_seg = SEG_A;
-			} else if (destination < current_position) { // Move down
+				next_seg  = SEG_A;
+				// only count when we *actually* crossed into a new floor
+				if (current_position % 4 == 0) {
+					current_floor = current_position;
+					if (traveller_onboard) {
+						floors_with_traveller++;
+						} else {
+						floors_without_traveller++;
+					}
+				}
+			}
+			else if (destination < current_position) { // Move down
 				current_position--;
-				moved = true;
+				moved     = true;
 				direction = "Down";
-                next_seg = SEG_D;
-			} 
-			
+				next_seg  = SEG_D;
+				// and here too
+				if (current_position % 4 == 0) {
+					current_floor = current_position;
+					if (traveller_onboard) {
+						floors_with_traveller++;
+						} else {
+						floors_without_traveller++;
+					}
+				}
+			}
 			
 			if (traveller_present && current_position == traveller_floor) {
 				traveller_present = false;
+				traveller_onboard = true;  
 				destination = traveller_dest;
 				traveller_dest = UNDEF_FLOOR;
 				draw_traveller();
 			}
 			
-			if (current_position % 4 == 0) {
-				current_floor = current_position;
+			if (traveller_onboard && current_position == destination) {
+				traveller_onboard = false;
 			}
+
 			
 			if (next_seg != last_direction) {
 				last_direction = next_seg;
@@ -313,13 +336,24 @@ void start_elevator_emulator(void) {
 		}
 		if (moved) {
 			clear_terminal();
-            uint8_t floor_num = current_floor / 4;
+			uint8_t floor_num = current_floor / 4;
+
 			move_terminal_cursor(10,10);
 			printf("Current Level: %d", floor_num);
+
 			move_terminal_cursor(10,12);
 			printf("Direction: %s", direction);
+
+			// New lines for Display #2:
+			move_terminal_cursor(10,14);
+			printf("Floors with traveller: %lu", floors_with_traveller);
+
+			move_terminal_cursor(10,16);
+			printf("Floors without traveller: %lu", floors_without_traveller);
+
 			moved = false;
-		}		
+		}
+	
 		// Handle any button or key inputs
 		handle_inputs();
 	}
