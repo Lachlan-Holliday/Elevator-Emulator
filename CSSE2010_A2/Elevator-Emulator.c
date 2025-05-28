@@ -10,21 +10,29 @@
 /* Definitions */
 
 #define F_CPU 8000000L
-#define BUZZER_DDR   DDRC
-#define BUZZER_PORT  PORTC
-#define BUZZER_PIN   PC5
+#define BUZZER_DDR DDRD
+#define BUZZER_PORT PORTD
+#define BUZZER_PIN PC7
 
-#define SEG_A  (1<<PA0)
-#define SEG_B  (1<<PA1)
-#define SEG_C  (1<<PA2)
-#define SEG_D  (1<<PA3)
-#define SEG_E  (1<<PA4)
-#define SEG_F  (1<<PA5)
-#define SEG_G  (1<<PA6)
+#define SEG_A (1<<PA0)
+#define SEG_B (1<<PA1)
+#define SEG_C (1<<PA2)
+#define SEG_D (1<<PA3)
+#define SEG_E (1<<PA4)
+#define SEG_F (1<<PA5)
+#define SEG_G (1<<PA6)
 #define SEG_MASK (SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F|SEG_G)
 
-#define SSD_CC   (1<<PC7)
-#define SSD_DP   (1<<PC6)
+#define SSD_CC (1<<PD2)
+#define SSD_DP (1<<PD3)
+
+#define LED_L0 (1<<PC4)
+#define LED_L1 (1<<PC5)
+#define LED_L2 (1<<PC6)
+#define LED_L3 (1<<PC7)
+#define LED_MASK (LED_L0|LED_L1|LED_L2|LED_L3)
+
+
 
 /* External Library Includes */
 
@@ -76,6 +84,38 @@ uint32_t floors_without_traveller = 0;
 
 #define TRAVELLER_COLUMN 4
 
+bool led_animating = false;
+uint32_t led_anim_start = 0;
+
+void start_led_animation(void) {
+	led_animating = true;
+	led_anim_start = get_current_time();
+}
+
+void service_led_animation(void) {
+	if (!led_animating) return;
+
+	uint32_t dt = get_current_time() - led_anim_start;
+	
+	PORTC &= ~LED_MASK;
+
+
+	if (dt < 400) { //door closed
+        PORTC |= (LED_L1|LED_L2);
+	}
+	else if (dt < 800) { // door open
+        PORTC |= (LED_L0|LED_L3);
+	}
+	else if (dt < 1200) { //door closing
+        PORTC |= (LED_L1|LED_L2);
+	}
+	else {
+		led_animating = false; //door close
+        PORTC |= (LED_L1|LED_L2);
+	}
+}
+
+
 
 /* Internal Function Declarations */
 
@@ -125,12 +165,12 @@ static void beep(uint16_t freq, uint16_t dur_ms) {
     for(uint32_t i = 0; i < toggles; i++) {
         while(!(TIFR1 & (1<<OCF1A)));   // wait for compare match
         TIFR1 |= (1<<OCF1A);            // clear the flag
-        PORTC ^= (1<<BUZZER_PIN);       // toggle the buzzer pin
+        BUZZER_PORT  ^= (1<<BUZZER_PIN);       // toggle the buzzer pin
     }
 
     // 5) Stop the timer and make sure the pin is low
     TCCR1B = 0;
-    PORTC &= ~(1<<BUZZER_PIN);
+    BUZZER_PORT  &= ~(1<<BUZZER_PIN);
 }
 
 
@@ -158,11 +198,14 @@ void initialise_hardware(void) {
 	PORTA &= ~SEG_MASK;
 
 	/* CC and DP on PORTC */
-	DDRC |= SSD_CC | SSD_DP;
-	PORTC |=  SSD_CC;
-	PORTC &= ~SSD_DP;
+	DDRD |= SSD_CC | SSD_DP;
+	PORTD |=  SSD_CC;
+	PORTD &= ~SSD_DP;
 	BUZZER_DDR |= (1<<BUZZER_PIN);
 	
+	DDRC |= LED_MASK;
+	PORTC &= ~LED_MASK;
+
 }
 
 /**
@@ -240,26 +283,26 @@ static void multiplex_ssd(void) {
 	show_floor = !show_floor;
 
 	if (show_floor) {
-		PORTC |= SSD_CC;
+		PORTD |= SSD_CC;
 		} else {
-		PORTC &= ~SSD_CC;
+		PORTD &= ~SSD_CC;
 	}
 
 	PORTA &= ~SEG_MASK;
-	PORTC &= ~SSD_DP;
+	PORTD &= ~SSD_DP;
 
 	if (show_floor) {
 		uint8_t f = current_floor / 4;
 		PORTA |= floor_seg[f];
 		if (current_position % 4 != 0) {
-			PORTC |= SSD_DP;
+			PORTD |= SSD_DP;
 		}
 		//right
-		PORTC &= ~SSD_CC;
+		PORTD &= ~SSD_CC;
 		} else {
 		PORTA |= last_direction;  
 		//left
-		PORTC |= SSD_CC;
+		PORTD |= SSD_CC;
 	}
 }
 
@@ -304,6 +347,8 @@ void start_elevator_emulator(void) {
 	
 	while(true) {
         multiplex_ssd();
+		service_led_animation();
+
 
 		speed = get_speed(); 
 		
@@ -348,11 +393,17 @@ void start_elevator_emulator(void) {
 				traveller_dest = UNDEF_FLOOR;
 				draw_traveller();
 				beep(500, 100);
+				
+				start_led_animation(); 
+
 			}
 			
 			if (traveller_onboard && current_position == destination) {
 				traveller_onboard = false;
 				beep(500, 100);
+				
+				start_led_animation();
+
 			}
 
 			
