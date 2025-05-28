@@ -11,9 +11,17 @@
 
 #define F_CPU 8000000L
 
-#define SSD_CC 0b00001000
-#define SSD_CC2 0b00010000
-#define SSD_CLEAR 0b00000111
+#define SEG_A  (1<<PA0)
+#define SEG_B  (1<<PA1)
+#define SEG_C  (1<<PA2)
+#define SEG_D  (1<<PA3)
+#define SEG_E  (1<<PA4)
+#define SEG_F  (1<<PA5)
+#define SEG_G  (1<<PA6)
+#define SEG_MASK (SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F|SEG_G)
+
+#define SSD_CC   (1<<PC7)
+#define SSD_DP   (1<<PC6)
 
 /* External Library Includes */
 
@@ -37,24 +45,30 @@
 
 typedef enum {UNDEF_FLOOR = -1, FLOOR_0=0, FLOOR_1=4, FLOOR_2=8, FLOOR_3=12} ElevatorFloor;
 
+uint8_t floor_seg[4] = {
+	SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F,    // “0”
+	SEG_B|SEG_C,                            // “1”
+	SEG_A|SEG_B|SEG_D|SEG_E|SEG_G,          // “2”
+	SEG_A|SEG_B|SEG_C|SEG_D|SEG_G           // “3”
+};
 
 /* Global Variables */
 uint32_t time_since_move;
 ElevatorFloor current_position;
 ElevatorFloor destination;
 ElevatorFloor current_floor;
+ElevatorFloor traveller_dest;
+ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
 const char *direction;
 bool moved = false;
 bool traveller_present = false;
 ElevatorFloor traveller_floor;
 uint16_t speed;
-uint8_t last_direction = 0;
+uint8_t last_direction = SEG_G;
 
 
 
 #define TRAVELLER_COLUMN 4
-ElevatorFloor last_traveller_floor = UNDEF_FLOOR;
-
 
 
 /* Internal Function Declarations */
@@ -103,13 +117,16 @@ void initialise_hardware(void) {
 	// Turn on global interrupts
 	sei();
 	
-	DDRA  |= SSD_CLEAR | SSD_CC | SSD_CC2;
-	  
-	// enable ssd
-	 PORTA |=  SSD_CC;
-	 PORTA &= ~SSD_CC2;
-	 
-	PORTA &= ~SSD_CLEAR;
+	/* segments A–G on PORTA */
+	DDRA |= SEG_MASK;
+	/* turn all segments off to start */
+	PORTA &= ~SEG_MASK;
+
+	/* CC and DP on PORTC */
+	 DDRC |= SSD_CC | SSD_DP;
+	 PORTC |=  SSD_CC;    // CC=1 ? left digit on, right off (active-low)
+	 PORTC &= ~SSD_DP;
+	
 }
 
 /**
@@ -178,6 +195,40 @@ void start_screen(void) {
 	}
 }
 
+static void multiplex_ssd(void) {
+	static uint32_t last_t = 0;
+	static bool show_floor = false;
+	uint32_t now = get_current_time();
+	if (now == last_t) return;
+	last_t = now;
+	show_floor = !show_floor;
+
+	if (show_floor) {
+		PORTC |= SSD_CC;
+		} else {
+		PORTC &= ~SSD_CC;
+	}
+
+	PORTA &= ~SEG_MASK;
+	PORTC &= ~SSD_DP;
+
+	if (show_floor) {
+		uint8_t f = current_floor / 4;
+		PORTA |= floor_seg[f];
+		if (current_position % 4 != 0) {
+			PORTC |= SSD_DP;
+		}
+		//right
+		PORTC &= ~SSD_CC;
+		} else {
+		PORTA |= last_direction;  
+		//left
+		PORTC |= SSD_CC;
+	}
+}
+
+
+
 /**
  * @brief Initialises LED matrix and then starts infinite loop handling elevator
  * @arg none
@@ -203,9 +254,9 @@ void start_elevator_emulator(void) {
 	current_floor    = FLOOR_0;
 	direction        = "Stationary";
 	moved            = true;
-	
-	// set pd4 as input (for speed switch)
-	DDRD &= 0b11101111;
+	traveller_dest = UNDEF_FLOOR;
+	last_traveller_floor = UNDEF_FLOOR;
+
 	
 	
 	// Draw the floors and elevator
@@ -214,43 +265,35 @@ void start_elevator_emulator(void) {
 	
 	current_position = FLOOR_0;
 	destination = FLOOR_0;
-	PORTA |= 0b00000010;
-
 	
 	while(true) {
-		uint8_t next_ssd_display;
+        multiplex_ssd();
 
 		speed = get_speed(); 
 		
 		// Only update the elevator every 200 ms
 		if (get_current_time() - time_since_move > speed) {	
-			
+			uint8_t next_seg = SEG_G;
+
 
 			// Adjust the elevator based on where it needs to go
-			if (destination - current_position > 0) { // Move up
+			if (destination > current_position) { // Move up
 				current_position++;
 				moved = true;
 				direction = "Up";
-				next_ssd_display = 0b00000001;
-			} else if (destination - current_position < 0) { // Move down
+				next_seg = SEG_A;
+			} else if (destination < current_position) { // Move down
 				current_position--;
 				moved = true;
 				direction = "Down";
-				next_ssd_display= 0b00000100;
-
-			} else {
-				direction = "Stationary";
-				next_ssd_display = 0b00000010;
-			}
+                next_seg = SEG_D;
+			} 
 			
-			if (destination == current_position) {
-				direction = "Stationary";
-				next_ssd_display = 0b00000010;
-			}
 			
 			if (traveller_present && current_position == traveller_floor) {
 				traveller_present = false;
-				destination = FLOOR_0;
+				destination = traveller_dest;
+				traveller_dest = UNDEF_FLOOR;
 				draw_traveller();
 			}
 			
@@ -258,18 +301,12 @@ void start_elevator_emulator(void) {
 				current_floor = current_position;
 			}
 			
-			if (next_ssd_display != last_direction) {
-				// clear A/G/D (bits 0–2)
-				PORTA &= ~SSD_CLEAR;
-
-				// light the new segment
-				PORTA |= next_ssd_display;
-
-				// remember for next time
-				last_direction = next_ssd_display;
+			if (next_seg != last_direction) {
+				last_direction = next_seg;
+				// update left digit
+				PORTA = (PORTA & ~SEG_MASK) | last_direction;
 			}
 			
-			// As we have potentially changed the elevator position, lets redraw it
 			draw_elevator();
 			
 			time_since_move = get_current_time(); // Reset delay until next movement update
@@ -309,12 +346,21 @@ void draw_traveller(void) {
 	}
 	if (traveller_present) {
 		int row = traveller_floor + 1;
-		update_square_colour(TRAVELLER_COLUMN, row, TRAVELLER_TO_0);
+		uint8_t obj;
+		switch (traveller_dest) {
+			case FLOOR_0: obj = TRAVELLER_TO_0; break;
+			case FLOOR_1: obj = TRAVELLER_TO_1; break;
+			case FLOOR_2: obj = TRAVELLER_TO_2; break;
+			case FLOOR_3: obj = TRAVELLER_TO_3; break;
+			default:      obj = TRAVELLER_TO_0; break;
+		}
+		update_square_colour(TRAVELLER_COLUMN, row, obj);
 		last_traveller_floor = traveller_floor;
-	} else {
+		} else {
 		last_traveller_floor = UNDEF_FLOOR;
 	}
 }
+
 
 /**
  * @brief Draws the elevator at the current_position
@@ -379,45 +425,52 @@ void handle_inputs(void) {
 	if (serial_input_available()) {
 		serial_input = fgetc(stdin);}
 		
-	if (traveller_present | (current_floor != destination)) {
+	if (traveller_present || (current_floor != destination)) {
 		return;
 	}
 	
-	if (btn == BUTTON0_PUSHED || serial_input == '0') {
-		// Move to Floor 0
-		destination = FLOOR_0;
-		traveller_present  = true;
-		traveller_floor = FLOOR_0;
-		draw_traveller();
-
-
-		
-	} else if (btn == BUTTON1_PUSHED || serial_input == '1') {
-		// Move to Floor 1
-		destination = FLOOR_1;
-		traveller_floor = FLOOR_1;
-		traveller_present  = true;
-		draw_traveller();
-
-
-
-	} else if (btn == BUTTON2_PUSHED || serial_input == '2') {
-		// Move to Floor 2
-		destination = FLOOR_2;
-		traveller_present  = true;
-		traveller_floor = FLOOR_2;
-		draw_traveller();
-
 	
-	} else if (btn == BUTTON3_PUSHED || serial_input == '3') {
-		// Move to Floor 3
-		destination = FLOOR_3;
-		traveller_present  = true;
-		traveller_floor = FLOOR_3;
-		draw_traveller();
-
+	uint8_t switch_bits = (PIND >> 5) & 0b11 ;
+	ElevatorFloor dest = UNDEF_FLOOR;
+	switch (switch_bits) {
+		case 0: dest = FLOOR_0; break;
+		case 1: dest = FLOOR_1; break;
+		case 2: dest = FLOOR_2; break;
+		case 3: dest = FLOOR_3; break;
 	}
 	
+	if (btn == BUTTON0_PUSHED || serial_input == '0') {
+		if (dest == FLOOR_0) return;            
+		traveller_dest = dest;
+		traveller_floor = FLOOR_0;
+		traveller_present= true;
+		destination = FLOOR_0;      
+		draw_traveller();
+	}
+	else if (btn == BUTTON1_PUSHED || serial_input == '1') {
+		if (dest == FLOOR_1) return;
+		traveller_dest = dest;
+		traveller_floor = FLOOR_1;
+		traveller_present= true;
+		destination = FLOOR_1;
+		draw_traveller();
+	}
+	else if (btn == BUTTON2_PUSHED || serial_input == '2') {
+		if (dest == FLOOR_2) return;
+		traveller_dest = dest;
+		traveller_floor = FLOOR_2;
+		traveller_present = true;
+		destination = FLOOR_2;
+		draw_traveller();
+	}
+	else if (btn == BUTTON3_PUSHED || serial_input == '3') {
+		if (dest == FLOOR_3) return;
+		traveller_dest = dest;
+		traveller_floor = FLOOR_3;
+		traveller_present = true;
+		destination = FLOOR_3;
+		draw_traveller();
+	}
 }
 
 uint16_t get_speed(void) {
