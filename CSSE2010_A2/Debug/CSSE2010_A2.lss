@@ -15,19 +15,19 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY
   5 .debug_aranges 000002a0  00000000  00000000  00001a44  2**0
                   CONTENTS, READONLY, DEBUGGING
-  6 .debug_info   00002507  00000000  00000000  00001ce4  2**0
+  6 .debug_info   00002506  00000000  00000000  00001ce4  2**0
                   CONTENTS, READONLY, DEBUGGING
-  7 .debug_abbrev 00001097  00000000  00000000  000041eb  2**0
+  7 .debug_abbrev 00001097  00000000  00000000  000041ea  2**0
                   CONTENTS, READONLY, DEBUGGING
-  8 .debug_line   0000187f  00000000  00000000  00005282  2**0
+  8 .debug_line   0000187f  00000000  00000000  00005281  2**0
                   CONTENTS, READONLY, DEBUGGING
-  9 .debug_frame  0000074c  00000000  00000000  00006b04  2**2
+  9 .debug_frame  0000074c  00000000  00000000  00006b00  2**2
                   CONTENTS, READONLY, DEBUGGING
- 10 .debug_str    00000cf3  00000000  00000000  00007250  2**0
+ 10 .debug_str    00000cf3  00000000  00000000  0000724c  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_loc    00001956  00000000  00000000  00007f43  2**0
+ 11 .debug_loc    00001956  00000000  00000000  00007f3f  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_ranges 00000238  00000000  00000000  00009899  2**0
+ 12 .debug_ranges 00000238  00000000  00000000  00009895  2**0
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -709,7 +709,6 @@ static void beep(uint16_t freq, uint16_t dur_ms)
      3a6:	cf 93       	push	r28
      3a8:	df 93       	push	r29
      3aa:	eb 01       	movw	r28, r22
-	// prescaler = 8, CTC mode
 	OCR1A   = F_CPU/(16UL*freq) - 1;
      3ac:	6c 01       	movw	r12, r24
      3ae:	e1 2c       	mov	r14, r1
@@ -752,7 +751,6 @@ static void beep(uint16_t freq, uint16_t dur_ms)
      3fe:	8a e0       	ldi	r24, 0x0A	; 10
      400:	80 93 81 00 	sts	0x0081, r24	; 0x800081 <__TEXT_REGION_LENGTH__+0x7f8081>
 
-	// total half-cycles to toggle = freq × dur_ms × 2 / 1000
 	uint32_t count = (uint32_t)freq * dur_ms * 2UL / 1000UL;
      404:	de 01       	movw	r26, r28
      406:	a7 01       	movw	r20, r14
@@ -769,11 +767,9 @@ static void beep(uint16_t freq, uint16_t dur_ms)
      41e:	0e 94 9b 08 	call	0x1136	; 0x1136 <__udivmodsi4>
 	while (count--) {
      422:	09 c0       	rjmp	.+18     	; 0x436 <__EEPROM_REGION_LENGTH__+0x36>
-		// wait for compare match
 		while (!(TIFR1 & (1<<OCF1A)));
      424:	b1 9b       	sbis	0x16, 1	; 22
      426:	fe cf       	rjmp	.-4      	; 0x424 <__EEPROM_REGION_LENGTH__+0x24>
-		// clear flag & toggle buzzer pin
 		TIFR1        = (1<<OCF1A);
      428:	82 e0       	ldi	r24, 0x02	; 2
      42a:	86 bb       	out	0x16, r24	; 22
@@ -781,10 +777,10 @@ static void beep(uint16_t freq, uint16_t dur_ms)
      42c:	8b b1       	in	r24, 0x0b	; 11
      42e:	80 58       	subi	r24, 0x80	; 128
      430:	8b b9       	out	0x0b, r24	; 11
+	TCNT1   = 0;
 	TCCR1A  = 0;
 	TCCR1B  = (1<<WGM12) | (1<<CS11);
 
-	// total half-cycles to toggle = freq × dur_ms × 2 / 1000
 	uint32_t count = (uint32_t)freq * dur_ms * 2UL / 1000UL;
 	while (count--) {
      432:	a7 01       	movw	r20, r14
@@ -800,11 +796,10 @@ static void beep(uint16_t freq, uint16_t dur_ms)
      446:	24 2b       	or	r18, r20
      448:	25 2b       	or	r18, r21
      44a:	61 f7       	brne	.-40     	; 0x424 <__EEPROM_REGION_LENGTH__+0x24>
+		while (!(TIFR1 & (1<<OCF1A)));
 		TIFR1        = (1<<OCF1A);
 		BUZZER_PORT ^= (1<<BUZZER_PIN);
 	}
-
-	// stop timer & ensure output is low
 	TCCR1B = 0;
      44c:	10 92 81 00 	sts	0x0081, r1	; 0x800081 <__TEXT_REGION_LENGTH__+0x7f8081>
 	BUZZER_PORT &= ~(1<<BUZZER_PIN);
@@ -1055,18 +1050,15 @@ void initialise_hardware(void) {
 	sei();
      5c4:	78 94       	sei
 	
-	/* segments A–G on PORTA */
 	DDRA |= SEG_MASK;
      5c6:	81 b1       	in	r24, 0x01	; 1
      5c8:	8f 67       	ori	r24, 0x7F	; 127
      5ca:	81 b9       	out	0x01, r24	; 1
-	/* turn all segments off to start */
 	PORTA &= ~SEG_MASK;
      5cc:	82 b1       	in	r24, 0x02	; 2
      5ce:	80 78       	andi	r24, 0x80	; 128
      5d0:	82 b9       	out	0x02, r24	; 2
 
-	/* CC and DP on PORTC */
 	DDRD |= SSD_CC | SSD_DP;
      5d2:	8a b1       	in	r24, 0x0a	; 10
      5d4:	8c 60       	ori	r24, 0x0C	; 12
@@ -1161,23 +1153,22 @@ void start_screen(void) {
      664:	0f 90       	pop	r0
      666:	0f 90       	pop	r0
 	
-	// Animation variables
 	uint32_t doors_frame_time = 0;
 	uint32_t interval_delay = 150;
 	uint8_t frame = 0;
-	uint8_t doors_opening_closing = 1; // 1 => opening, 0 => closing
+	uint8_t doors_opening_closing = 1;
      668:	d1 e0       	ldi	r29, 0x01	; 1
+	// Show start screen
 	start_display();
 	
-	// Animation variables
 	uint32_t doors_frame_time = 0;
 	uint32_t interval_delay = 150;
 	uint8_t frame = 0;
      66a:	c0 e0       	ldi	r28, 0x00	; 0
+	
 	// Show start screen
 	start_display();
 	
-	// Animation variables
 	uint32_t doors_frame_time = 0;
 	uint32_t interval_delay = 150;
      66c:	0f 2e       	mov	r0, r31
@@ -1187,11 +1178,11 @@ void start_screen(void) {
      674:	a1 2c       	mov	r10, r1
      676:	b1 2c       	mov	r11, r1
      678:	f0 2d       	mov	r31, r0
+	printf_P(PSTR("Student Number: 48840468"));
 	
 	// Show start screen
 	start_display();
 	
-	// Animation variables
 	uint32_t doors_frame_time = 0;
      67a:	c1 2c       	mov	r12, r1
      67c:	d1 2c       	mov	r13, r1
@@ -2222,7 +2213,6 @@ void start_elevator_emulator(void) {
      c54:	8f 93       	push	r24
      c56:	0e 94 34 09 	call	0x1268	; 0x1268 <printf>
 
-			// New lines for Display #2:
 			move_terminal_cursor(10,14);
      c5a:	6e e0       	ldi	r22, 0x0E	; 14
      c5c:	70 e0       	ldi	r23, 0x00	; 0
@@ -2277,7 +2267,6 @@ void start_elevator_emulator(void) {
      ccc:	8d bf       	out	0x3d, r24	; 61
 		}
 	
-		// Handle any button or key inputs
 		handle_inputs();
      cce:	0e 94 35 04 	call	0x86a	; 0x86a <handle_inputs>
 	}

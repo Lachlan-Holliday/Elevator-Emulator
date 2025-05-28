@@ -943,17 +943,17 @@ END GROUP
 .debug_pubnames
  *(.debug_pubnames)
 
-.debug_info     0x00000000     0x2507
+.debug_info     0x00000000     0x2506
  *(.debug_info .gnu.linkonce.wi.*)
  .debug_info    0x00000000      0x6cc C:/Program Files (x86)/Atmel/Studio/7.0/Packs/atmel/ATmega_DFP/1.7.374/gcc/dev/atmega324a/avr5/crtatmega324a.o
  .debug_info    0x000006cc      0x193 buttons.o
  .debug_info    0x0000085f      0x2c8 display.o
- .debug_info    0x00000b27      0xa65 Elevator-Emulator.o
- .debug_info    0x0000158c      0x526 ledmatrix.o
- .debug_info    0x00001ab2      0x3e9 serialio.o
- .debug_info    0x00001e9b       0xc1 spi.o
- .debug_info    0x00001f5c      0x4a2 terminalio.o
- .debug_info    0x000023fe      0x109 timer0.o
+ .debug_info    0x00000b27      0xa64 Elevator-Emulator.o
+ .debug_info    0x0000158b      0x526 ledmatrix.o
+ .debug_info    0x00001ab1      0x3e9 serialio.o
+ .debug_info    0x00001e9a       0xc1 spi.o
+ .debug_info    0x00001f5b      0x4a2 terminalio.o
+ .debug_info    0x000023fd      0x109 timer0.o
 
 .debug_abbrev   0x00000000     0x1097
  *(.debug_abbrev)

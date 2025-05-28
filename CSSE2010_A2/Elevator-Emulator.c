@@ -57,10 +57,10 @@
 typedef enum {UNDEF_FLOOR = -1, FLOOR_0=0, FLOOR_1=4, FLOOR_2=8, FLOOR_3=12} ElevatorFloor;
 
 uint8_t floor_seg[4] = {
-	SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F,    // “0”
-	SEG_B|SEG_C,                            // “1”
-	SEG_A|SEG_B|SEG_D|SEG_E|SEG_G,          // “2”
-	SEG_A|SEG_B|SEG_C|SEG_D|SEG_G           // “3”
+	SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F,    // 0
+	SEG_B|SEG_C,                            // 1
+	SEG_A|SEG_B|SEG_D|SEG_E|SEG_G,          // 2
+	SEG_A|SEG_B|SEG_C|SEG_D|SEG_G           // 3
 };
 
 /* Global Variables */
@@ -182,12 +182,9 @@ void initialise_hardware(void) {
 	// Turn on global interrupts
 	sei();
 	
-	/* segments A–G on PORTA */
 	DDRA |= SEG_MASK;
-	/* turn all segments off to start */
 	PORTA &= ~SEG_MASK;
 
-	/* CC and DP on PORTC */
 	DDRD |= SSD_CC | SSD_DP;
 	PORTD |=  SSD_CC;
 	PORTD &= ~SSD_DP;
@@ -216,11 +213,10 @@ void start_screen(void) {
 	// Show start screen
 	start_display();
 	
-	// Animation variables
 	uint32_t doors_frame_time = 0;
 	uint32_t interval_delay = 150;
 	uint8_t frame = 0;
-	uint8_t doors_opening_closing = 1; // 1 => opening, 0 => closing
+	uint8_t doors_opening_closing = 1;
 	
 	// Wait until a button is pressed, or 's' is pressed on the terminal
 	while(1) {
