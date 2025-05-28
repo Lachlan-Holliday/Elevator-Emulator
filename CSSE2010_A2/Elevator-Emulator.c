@@ -10,6 +10,9 @@
 /* Definitions */
 
 #define F_CPU 8000000L
+#define BUZZER_DDR   DDRC
+#define BUZZER_PORT  PORTC
+#define BUZZER_PIN   PC5
 
 #define SEG_A  (1<<PA0)
 #define SEG_B  (1<<PA1)
@@ -102,6 +105,35 @@ int main(void) {
 
 /* Internal Function Definitions */
 
+
+static void beep(uint16_t freq, uint16_t dur_ms) {
+    // 1) Compute OCR1A for toggle-on-compare, prescaler=8
+    uint16_t ocr = (F_CPU/(2UL*8UL*freq)) - 1;
+    OCR1A = ocr;
+
+    // 2) Reset counter, start CTC mode + clk/8
+    TCNT1  = 0;
+    TCCR1A = 0;                      // normal port ops on OC1A
+    TCCR1B = (1<<WGM12)|(1<<CS11);   // CTC + prescaler 8
+
+    // 3) Figure out how many toggles we need:
+    //    each full square wave is two toggles,
+    //    so toggles = freq * (dur_ms/1000) * 2
+    uint32_t toggles = (uint32_t)freq * dur_ms * 2UL / 1000UL;
+
+    // 4) Busy-wait & toggle PC5 each time OCF1A goes high:
+    for(uint32_t i = 0; i < toggles; i++) {
+        while(!(TIFR1 & (1<<OCF1A)));   // wait for compare match
+        TIFR1 |= (1<<OCF1A);            // clear the flag
+        PORTC ^= (1<<BUZZER_PIN);       // toggle the buzzer pin
+    }
+
+    // 5) Stop the timer and make sure the pin is low
+    TCCR1B = 0;
+    PORTC &= ~(1<<BUZZER_PIN);
+}
+
+
 /**
  * @brief All hardware initialisation occurs here
  * @arg none
@@ -126,9 +158,10 @@ void initialise_hardware(void) {
 	PORTA &= ~SEG_MASK;
 
 	/* CC and DP on PORTC */
-	 DDRC |= SSD_CC | SSD_DP;
-	 PORTC |=  SSD_CC;    // CC=1 ? left digit on, right off (active-low)
-	 PORTC &= ~SSD_DP;
+	DDRC |= SSD_CC | SSD_DP;
+	PORTC |=  SSD_CC;
+	PORTC &= ~SSD_DP;
+	BUZZER_DDR |= (1<<BUZZER_PIN);
 	
 }
 
@@ -279,13 +312,11 @@ void start_elevator_emulator(void) {
 			uint8_t next_seg = SEG_G;
 
 
-			// Adjust the elevator based on where it needs to go
 			if (destination > current_position) { // Move up
 				current_position++;
 				moved     = true;
 				direction = "Up";
 				next_seg  = SEG_A;
-				// only count when we *actually* crossed into a new floor
 				if (current_position % 4 == 0) {
 					current_floor = current_position;
 					if (traveller_onboard) {
@@ -300,7 +331,6 @@ void start_elevator_emulator(void) {
 				moved     = true;
 				direction = "Down";
 				next_seg  = SEG_D;
-				// and here too
 				if (current_position % 4 == 0) {
 					current_floor = current_position;
 					if (traveller_onboard) {
@@ -317,10 +347,12 @@ void start_elevator_emulator(void) {
 				destination = traveller_dest;
 				traveller_dest = UNDEF_FLOOR;
 				draw_traveller();
+				beep(500, 100);
 			}
 			
 			if (traveller_onboard && current_position == destination) {
 				traveller_onboard = false;
+				beep(500, 100);
 			}
 
 			
@@ -480,6 +512,7 @@ void handle_inputs(void) {
 		traveller_present= true;
 		destination = FLOOR_0;      
 		draw_traveller();
+		beep(3000, 50);
 	}
 	else if (btn == BUTTON1_PUSHED || serial_input == '1') {
 		if (dest == FLOOR_1) return;
@@ -488,6 +521,7 @@ void handle_inputs(void) {
 		traveller_present= true;
 		destination = FLOOR_1;
 		draw_traveller();
+		beep(3000, 50);
 	}
 	else if (btn == BUTTON2_PUSHED || serial_input == '2') {
 		if (dest == FLOOR_2) return;
@@ -496,6 +530,7 @@ void handle_inputs(void) {
 		traveller_present = true;
 		destination = FLOOR_2;
 		draw_traveller();
+		beep(3000, 50);
 	}
 	else if (btn == BUTTON3_PUSHED || serial_input == '3') {
 		if (dest == FLOOR_3) return;
@@ -504,6 +539,7 @@ void handle_inputs(void) {
 		traveller_present = true;
 		destination = FLOOR_3;
 		draw_traveller();
+		beep(3000, 50);
 	}
 }
 
